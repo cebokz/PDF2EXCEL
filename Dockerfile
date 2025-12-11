@@ -24,9 +24,7 @@ COPY . .
 EXPOSE 8080
 
 # Disable CORS/XSRF and run headless inside container
-ENV STREAMLIT_SERVER_ENABLECORS=false \
-    STREAMLIT_SERVER_ENABLEXSFRPROTECTION=false \
-    STREAMLIT_BROWSER_GATHER_USAGE_STATS=false
+ENV STREAMLIT_BROWSER_GATHER_USAGE_STATS=false
 
-# Use a shell to expand $PORT for Streamlit
-CMD ["sh", "-c", "streamlit run app.py --server.port=$PORT --server.address=0.0.0.0"]
+# Use a shell to expand $PORT for Streamlit and disable CORS/XSRF explicitly
+CMD ["sh", "-c", "streamlit run app.py --server.port=$PORT --server.address=0.0.0.0 --server.enableCORS=false --server.enableXsrfProtection=false --server.enableWebsocketCompression=false"]
