@@ -406,18 +406,21 @@ def run_pipeline(
     df_raw, debug = extract_tables_from_pdf(pdf_bytes, page_start=page_start, page_end=page_end, stop_after_first_table=stop_after_first_table)
 
     if raw_passthrough:
-        debug.append("Raw passthrough enabled: skipping text fallback and normalization.")
-        df_checked = df_raw.copy()
-        ok_count = len(df_checked)
-        issue_count = 0
-        meta = {
-            "rows": len(df_checked),
-            "cols": df_checked.shape[1] if not df_checked.empty else 0,
-            "ok": ok_count,
-            "issues": issue_count,
-            "mode": "raw_passthrough",
-        }
-        return df_checked, debug, meta
+        if df_raw.empty:
+            debug.append("Raw passthrough enabled but extracted tables are empty; falling back to parsed mode.")
+        else:
+            debug.append("Raw passthrough enabled: skipping text fallback and normalization.")
+            df_checked = df_raw.copy()
+            ok_count = len(df_checked)
+            issue_count = 0
+            meta = {
+                "rows": len(df_checked),
+                "cols": df_checked.shape[1] if not df_checked.empty else 0,
+                "ok": ok_count,
+                "issues": issue_count,
+                "mode": "raw_passthrough",
+            }
+            return df_checked, debug, meta
 
     df_raw_text, debug_text = parse_transactions_from_text(pdf_bytes, page_start=page_start, page_end=page_end)
     debug.extend(debug_text)
@@ -440,6 +443,13 @@ def run_pipeline(
     df_norm = normalize_dataframe(df_raw)
     log_event("Normalization applied (date, description, amount, balance)")
     df_checked = compliance_checks(df_norm)
+
+    # Final safety: if parsed result is empty, fall back to text-derived raw
+    if df_checked.empty and not df_raw_text.empty:
+        debug.append("Parsed output empty; falling back to text-derived tables.")
+        df_norm = normalize_dataframe(df_raw_text)
+        df_checked = compliance_checks(df_norm)
+
     ok_count = sum(df_checked["notes"] == "ok") if not df_checked.empty else 0
     issue_count = sum(df_checked["notes"] != "ok") if not df_checked.empty else 0
     log_event(f"Compliance checks completed; ok={ok_count} issues={issue_count}")
