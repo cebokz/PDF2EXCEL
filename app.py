@@ -77,13 +77,12 @@ def parse_transactions_from_text(pdf_bytes: bytes, page_start: int = 1, page_end
         if not m:
             return None
         body = m.group("body")
-        # Find monetary-looking tokens:
+        # Find monetary-looking tokens, requiring a decimal or explicit cent marker to avoid IDs being misread as amounts.
         #  - optional sign
         #  - digits with optional thousands spaces
-        #  - optional decimal with 1-2 digits
-        #  - optional trailing 'c' (cents)
+        #  - decimal with 1-2 digits and optional 'c', OR whole cents like '12c'
         #  - optional trailing '*'
-        amount_pattern = r"([+-]?\d[\d\s]*(?:\.\d{1,2})?c?)(\*)?"
+        amount_pattern = r"([+-]?\d[\d\s]*\.\d{1,2}c?|[+-]?\d+c)(\*)?"
         matches = list(re.finditer(amount_pattern, body, flags=re.IGNORECASE))
         if not matches:
             return None
