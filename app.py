@@ -88,6 +88,8 @@ def parse_transactions_from_text(pdf_bytes: bytes, page_start: int = 1, page_end
             return None
         first_amt_pos = matches[0].start()
         description = body[:first_amt_pos].strip()
+        if not description:
+            description = body.strip()
         # Collect amounts, last token is balance
         tokens = [(match.group(1), bool(match.group(2))) for match in matches]
         balance_str = tokens[-1][0]
@@ -119,6 +121,7 @@ def parse_transactions_from_text(pdf_bytes: bytes, page_start: int = 1, page_end
             "money_out": money_out,
             "fee": fee,
             "balance": balance,
+            "raw_line": line.strip(),
         }
 
     with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
