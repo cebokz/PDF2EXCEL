@@ -454,7 +454,7 @@ def main() -> None:
 
     page_start = 1
     page_end: Optional[int] = None
-    stop_after_first_table = st.checkbox("Fast mode: stop after first table per page", value=True)
+    stop_after_first_table = False
     page_count = None
     if uploaded_file:
         with pdfplumber.open(io.BytesIO(uploaded_file.getvalue())) as pdf:
