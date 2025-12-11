@@ -77,14 +77,20 @@ def parse_transactions_from_text(pdf_bytes: bytes, page_start: int = 1, page_end
         if not m:
             return None
         body = m.group("body")
-        # Find all monetary-looking tokens (allow spaces as thousands separators, optional trailing *)
-        matches = list(re.finditer(r"([+-]?\d[\d\s]*\.\d{2})(\*)?", body))
+        # Find monetary-looking tokens:
+        #  - optional sign
+        #  - digits with optional thousands spaces
+        #  - optional decimal with 1-2 digits
+        #  - optional trailing 'c' (cents)
+        #  - optional trailing '*'
+        amount_pattern = r"([+-]?\d[\d\s]*(?:\.\d{1,2})?c?)(\*)?"
+        matches = list(re.finditer(amount_pattern, body, flags=re.IGNORECASE))
         if not matches:
             return None
         first_amt_pos = matches[0].start()
         description = body[:first_amt_pos].strip()
         # Collect amounts, last token is balance
-        tokens = [(match.group(1).replace(" ", ""), bool(match.group(2))) for match in matches]
+        tokens = [(match.group(1), bool(match.group(2))) for match in matches]
         balance_str = tokens[-1][0]
         remainder = tokens[:-1]
         money_in = money_out = fee = None
@@ -293,17 +299,39 @@ def normalize_dataframe(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def parse_amount(value: str) -> Optional[float]:
+    """
+    Parse an amount string with support for:
+    - Thousand separators (spaces or commas)
+    - Trailing '*' markers
+    - Cent notation (e.g., '39.5c' meaning 0.395)
+    """
     if value is None:
         return None
-    txt = str(value).strip()
-    if txt == "":
+    raw_txt = str(value).strip()
+    if raw_txt == "":
         return None
-    # Remove currency symbols, commas, spaces, trailing markers like '*'
-    cleaned = re.sub(r"[^0-9\.-]", "", txt.replace(",", ""))
+
+    cents = False
+    # Detect trailing cent marker
+    if re.search(r"(?:c|cent)s?$", raw_txt, flags=re.IGNORECASE):
+        cents = True
+
+    txt = raw_txt.replace(",", "").replace(" ", "")
+    # Remove trailing non-numeric markers like '*'
+    txt = re.sub(r"[*]+$", "", txt)
+
+    # Strip trailing 'c' or 'cent(s)' for parsing
+    txt = re.sub(r"(?:c|cent)s?$", "", txt, flags=re.IGNORECASE)
+
+    # Keep only digits, optional leading sign, and decimal point
+    cleaned = re.sub(r"[^0-9\.\-]", "", txt)
     if cleaned in ("", ".", "-", "-.", ".-"):
         return None
     try:
-        return float(cleaned)
+        amount = float(cleaned)
+        if cents:
+            amount = amount / 100.0
+        return amount
     except Exception:
         return None
 
