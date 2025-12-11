@@ -398,14 +398,27 @@ def compliance_checks(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def run_pipeline(
-    user_id: str, uploaded_file, page_start: int, page_end: Optional[int], stop_after_first_table: bool
+    user_id: str, uploaded_file, page_start: int, page_end: Optional[int], stop_after_first_table: bool, raw_passthrough: bool
 ) -> Tuple[pd.DataFrame, List[str], Dict]:
     pdf_bytes = uploaded_file.getvalue()
     log_event(f"User {user_id} uploaded file '{uploaded_file.name}' (size={len(pdf_bytes)} bytes)")
     log_event("Starting extraction")
-    df_raw, debug = extract_tables_from_pdf(
-        pdf_bytes, page_start=page_start, page_end=page_end, stop_after_first_table=stop_after_first_table
-    )
+    df_raw, debug = extract_tables_from_pdf(pdf_bytes, page_start=page_start, page_end=page_end, stop_after_first_table=stop_after_first_table)
+
+    if raw_passthrough:
+        debug.append("Raw passthrough enabled: skipping text fallback and normalization.")
+        df_checked = df_raw.copy()
+        ok_count = len(df_checked)
+        issue_count = 0
+        meta = {
+            "rows": len(df_checked),
+            "cols": df_checked.shape[1] if not df_checked.empty else 0,
+            "ok": ok_count,
+            "issues": issue_count,
+            "mode": "raw_passthrough",
+        }
+        return df_checked, debug, meta
+
     df_raw_text, debug_text = parse_transactions_from_text(pdf_bytes, page_start=page_start, page_end=page_end)
     debug.extend(debug_text)
 
@@ -430,7 +443,13 @@ def run_pipeline(
     ok_count = sum(df_checked["notes"] == "ok") if not df_checked.empty else 0
     issue_count = sum(df_checked["notes"] != "ok") if not df_checked.empty else 0
     log_event(f"Compliance checks completed; ok={ok_count} issues={issue_count}")
-    meta = {"rows": len(df_checked), "cols": df_checked.shape[1] if not df_checked.empty else 0, "ok": ok_count, "issues": issue_count}
+    meta = {
+        "rows": len(df_checked),
+        "cols": df_checked.shape[1] if not df_checked.empty else 0,
+        "ok": ok_count,
+        "issues": issue_count,
+        "mode": "parsed",
+    }
     return df_checked, debug, meta
 
 
@@ -451,6 +470,7 @@ def main() -> None:
     user_id = st.text_input("User ID", value="user-001")
     case_number = st.text_input("Case number (optional)", value="")
     uploaded_file = st.file_uploader("Upload bank statement (PDF)", type=["pdf"])
+    raw_passthrough = st.checkbox("Exact table layout (no parsing/normalization)", value=False)
 
     page_start = 1
     page_end: Optional[int] = None
@@ -487,7 +507,12 @@ def main() -> None:
                 log_event(f"Saved PDF to {pdf_path} (sha256={pdf_hash}, case={case_number or 'n/a'})")
 
                 df, debug, meta = run_pipeline(
-                    user_id, uploaded_file, page_start=page_start, page_end=page_end, stop_after_first_table=stop_after_first_table
+                    user_id,
+                    uploaded_file,
+                    page_start=page_start,
+                    page_end=page_end,
+                    stop_after_first_table=stop_after_first_table,
+                    raw_passthrough=raw_passthrough,
                 )
                 for msg in debug:
                     log_event(msg)
