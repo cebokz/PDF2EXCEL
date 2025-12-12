@@ -16,6 +16,7 @@ from dateutil import parser as dtparser
 LOGS: List[str] = []
 EVIDENCE_ROOT = Path("evidence")
 AUDIT_LOG = Path("audit.log")
+MERGED_AMT_BAL_PATTERN = re.compile(r"(-?\d+\.\d{2})\s+(\d+\.\d{2})")
 
 
 def log_event(message: str) -> None:
@@ -158,6 +159,32 @@ def normalize_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty:
         return df
     df = df.copy()
+
+    # Expand cells that have merged amount/balance values like "-6.95 442.88"
+    def split_merged_amount_balance(frame: pd.DataFrame) -> pd.DataFrame:
+        new_rows: List[List] = []
+        max_cols = 0
+        for _, row in frame.iterrows():
+            cells: List = []
+            for val in row.tolist():
+                if isinstance(val, str):
+                    m = MERGED_AMT_BAL_PATTERN.search(val)
+                    if m:
+                        prefix = val[: m.start()].strip()
+                        if prefix:
+                            cells.append(prefix)
+                        cells.append(m.group(1))
+                        cells.append(m.group(2))
+                    else:
+                        cells.append(val)
+                else:
+                    cells.append(val)
+            max_cols = max(max_cols, len(cells))
+            new_rows.append(cells)
+        padded = [row + [None] * (max_cols - len(row)) for row in new_rows]
+        return pd.DataFrame(padded)
+
+    df = split_merged_amount_balance(df)
     # Drop rows that are completely empty across expected fields
     if set(["date", "description", "amount", "balance"]).issubset(df.columns):
         df = df[~((df["date"].astype(str).str.strip() == "") & (df["description"].astype(str).str.strip() == "") & df["amount"].isna() & df["balance"].isna())]
