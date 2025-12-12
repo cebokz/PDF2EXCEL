@@ -581,7 +581,9 @@ def main() -> None:
 
                     # Excel export in-memory
                     buf = io.BytesIO()
-                    df.to_excel(buf, index=False)
+                    df_export = df.copy()
+                    df_export = df_export.where(pd.notna(df_export), "")
+                    df_export.to_excel(buf, index=False)
                     buf.seek(0)
                     excel_path = run_dir / f"{Path(uploaded_file.name).stem}_processed.xlsx"
                     excel_path.write_bytes(buf.getvalue())
