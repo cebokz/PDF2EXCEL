@@ -520,14 +520,15 @@ def main() -> None:
                 write_audit("upload_saved", {"user": user_id, "case": case_number, "run_ts": run_ts, "file": str(pdf_path), "sha256": pdf_hash, "size_bytes": len(pdf_bytes)})
                 log_event(f"Saved PDF to {pdf_path} (sha256={pdf_hash}, case={case_number or 'n/a'})")
 
-                df, debug, meta = run_pipeline(
-                    user_id,
-                    uploaded_file,
-                    page_start=page_start,
-                    page_end=page_end,
-                    stop_after_first_table=stop_after_first_table,
-                    raw_passthrough=raw_passthrough,
-                )
+                with st.spinner("Processing PDF (extracting tables, parsing, and building Excel)..."):
+                    df, debug, meta = run_pipeline(
+                        user_id,
+                        uploaded_file,
+                        page_start=page_start,
+                        page_end=page_end,
+                        stop_after_first_table=stop_after_first_table,
+                        raw_passthrough=raw_passthrough,
+                    )
                 for msg in debug:
                     log_event(msg)
                     write_audit("debug", {"user": user_id, "case": case_number, "run_ts": run_ts, "message": msg})
