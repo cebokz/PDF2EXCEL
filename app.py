@@ -467,11 +467,13 @@ def run_pipeline(
 
 def main() -> None:
     st.set_page_config(page_title="PDF to Excel Bank Statement", layout="wide")
-    # Hide Streamlit's deploy button for internal use
+    # Hide Streamlit's deploy button and hamburger menu for a cleaner UI
     st.markdown(
         """
         <style>
         [data-testid="stDeployButton"] {visibility: hidden;}
+        #MainMenu {visibility: hidden;}
+        footer {visibility: hidden;}
         </style>
         """,
         unsafe_allow_html=True,
